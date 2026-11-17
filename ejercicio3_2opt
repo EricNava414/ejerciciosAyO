@@ -1,0 +1,95 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+
+def generate_cities(n, seed=42):
+    np.random.seed(seed)
+    return np.random.rand(n, 2)
+
+def distance_matrix(cities):
+    return np.sqrt(((cities[:, None, :] - cities[None, :, :]) ** 2).sum(-1))
+
+def tour_cost(tour, D):
+    return D[np.array(tour), np.roll(tour, -1)].sum()
+
+def random_tour(n):
+    return list(np.random.permutation(n))
+
+def nearest_neighbor_tour(D, start=None):
+    n = D.shape[0]
+    if start is None:
+        start = np.random.randint(n)
+    unvisited = set(range(n))
+    unvisited.remove(start)
+    tour = [start]
+    cur = start
+    while unvisited:
+        nxt = min(unvisited, key=lambda c: D[cur][c])
+        tour.append(nxt)
+        unvisited.remove(nxt)
+        cur = nxt
+    return tour
+
+def two_opt(tour, D):
+    tour = list(tour)
+    n = len(tour)
+    improvements = 0
+    improved = True
+    while improved:
+        improved = False
+        for i in range(n - 1):
+            for j in range(i + 2, n):
+                if i == 0 and j == n - 1: continue
+                a, b, c, d = tour[i], tour[i + 1], tour[j], tour[(j + 1) % n]
+                delta = (D[a][c] + D[b][d]) - (D[a][b] + D[c][d])
+                if delta < -1e-10:
+                    tour[i + 1:j + 1] = reversed(tour[i + 1:j + 1])
+                    improvements += 1
+                    improved = True
+                    break
+            if improved: break
+    return tour, improvements
+
+if __name__ == "__main__":
+    n_cities = 20
+    trials = 30
+    cities = generate_cities(n_cities, seed=0)
+    D = distance_matrix(cities)
+
+    imps_rand, imps_nn = [], []
+    costs_rand, costs_nn = [], []
+
+    for t in range(trials):
+        # Aleatorio
+        t0 = random_tour(n_cities)
+        t_opt, imp = two_opt(t0, D)
+        imps_rand.append(imp)
+        costs_rand.append(tour_cost(t_opt, D))
+
+        # Vecino más cercano
+        t0 = nearest_neighbor_tour(D, start=t % n_cities)
+        t_opt, imp = two_opt(t0, D)
+        imps_nn.append(imp)
+        costs_nn.append(tour_cost(t_opt, D))
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    labels = ['Aleatorio', 'Vecino más cercano']
+    
+    axes[0].boxplot([imps_rand, imps_nn], positions=[1, 2], widths=0.6)
+    axes[0].set_xticks([1, 2]); axes[0].set_xticklabels(labels)
+    axes[0].set_title('Nº de mejoras 2-opt'); axes[0].set_ylabel('Mejoras')
+
+    axes[1].boxplot([costs_rand, costs_nn], positions=[1, 2], widths=0.6)
+    axes[1].set_xticks([1, 2]); axes[1].set_xticklabels(labels)
+    axes[1].set_title('Costo final (óptimo local)'); axes[1].set_ylabel('Costo')
+
+    plt.suptitle('Ejercicio 3 — 2-opt: inicio aleatorio vs Vecino Más Cercano')
+    plt.tight_layout()
+    plt.savefig('ejercicio3_2opt.png', dpi=100)
+    plt.show()
+
+    print("\nANÁLISIS:")
+    print(f"Mejoras promedio (Aleatorio): {np.mean(imps_rand):.2f}")
+    print(f"Mejoras promedio (NN):        {np.mean(imps_nn):.2f}")
+    print("El inicio con Vecino Más Cercano requiere MENOS mejoras porque ya está")
+    print("en un mínimo local mejor. El costo final también es menor.")

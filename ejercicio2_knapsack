@@ -1,0 +1,69 @@
+import matplotlib.pyplot as plt
+
+def knapsack_greedy(items, capacity, criterion='ratio'):
+    """Resuelve la mochila voraz usando el criterio indicado."""
+    if criterion == 'ratio':
+        # Ordenar por mayor valor/peso
+        items_sorted = sorted(items, key=lambda x: x['value'] / x['weight'], reverse=True)
+    elif criterion == 'weight':
+        # Ordenar por menor peso
+        items_sorted = sorted(items, key=lambda x: x['weight'])
+    
+    total_value = 0
+    total_weight = 0
+    selected = []
+    
+    for item in items_sorted:
+        if total_weight + item['weight'] <= capacity:
+            selected.append(item['id'])
+            total_weight += item['weight']
+            total_value += item['value']
+            
+    return selected, total_weight, total_value
+
+if __name__ == "__main__":
+    # Instancia diseñada para que el criterio de menor peso falle estrepitosamente
+    items = [
+        {'id': 'A', 'weight': 1, 'value': 1},    # Muy ligero, casi sin valor
+        {'id': 'B', 'weight': 2, 'value': 2},    # Ligero, poco valor
+        {'id': 'C', 'weight': 10, 'value': 100}, # Pesado, MUCHO valor
+    ]
+    capacity = 10
+
+    sel_ratio, w_ratio, v_ratio = knapsack_greedy(items, capacity, 'ratio')
+    sel_weight, w_weight, v_weight = knapsack_greedy(items, capacity, 'weight')
+
+    print("Ejercicio 2: Mochila Voraz")
+    print(f"Capacidad de la mochila: {capacity}\n")
+    
+    print("Método 1: Mejor Valor/Peso")
+    print(f"Seleccionados: {sel_ratio} | Peso usado: {w_ratio} | Valor total: {v_ratio}")
+    
+    print("\nMétodo 2: Menor Peso Primero")
+    print(f"Seleccionados: {sel_weight} | Peso usado: {w_weight} | Valor total: {v_weight}")
+
+    # Visualización (Gráfica de barras agrupadas)
+    labels = ['Valor Total', 'Peso Usado']
+    ratio_stats = [v_ratio, w_ratio]
+    weight_stats = [v_weight, w_weight]
+
+    x = range(len(labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar([i - width/2 for i in x], ratio_stats, width, label='Criterio Valor/Peso', color='#4472c4')
+    ax.bar([i + width/2 for i in x], weight_stats, width, label='Criterio Menor Peso', color='#ed7d31')
+
+    ax.set_ylabel('Cantidad')
+    ax.set_title('Comparación de Mochila Voraz: Valor/Peso vs Menor Peso')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+    plt.grid(axis='y', alpha=0.3)
+    plt.savefig('ejercicio2_knapsack.png', dpi=100)
+    plt.show()
+
+    print("\nANÁLISIS:")
+    print("El criterio de Menor Peso llenó la mochila con objetos pequeños (A y B),")
+    print("dejando fuera el objeto C que tenía el mayor valor. Por lo tanto, el valor")
+    print("total obtenido es pésimo comparado con priorizar el ratio Valor/Peso.")

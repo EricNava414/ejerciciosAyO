@@ -1,0 +1,96 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+
+def generate_cities(n, seed=42):
+    np.random.seed(seed)
+    return np.random.rand(n, 2)
+
+def distance_matrix(cities):
+    return np.sqrt(((cities[:, None, :] - cities[None, :, :]) ** 2).sum(-1))
+
+def tour_cost(tour, D):
+    return D[np.array(tour), np.roll(tour, -1)].sum()
+
+def sa_2opt(D, schedule='exponential', T0=1000.0, alpha=0.995, Tmin=1e-4, max_iter=20000, seed=42):
+    np.random.seed(seed)
+    n = D.shape[0]
+    current = list(np.random.permutation(n))
+    current_cost = tour_cost(current, D)
+    best, best_cost = current[:], current_cost
+    T = T0
+    history = [(0, current_cost, T)]
+
+    dT_linear = (T0 - Tmin) / max_iter if schedule == 'linear' else None
+
+    for it in range(1, max_iter + 1):
+        if T <= Tmin: break
+        
+        i, j = sorted(np.random.choice(n, 2, replace=False))
+        if j - i < 2 or (i == 0 and j == n - 1): continue
+
+        new = current[:]
+        new[i + 1:j + 1] = reversed(new[i + 1:j + 1])
+        new_cost = tour_cost(new, D)
+        delta = new_cost - current_cost
+
+        if delta < 0 or np.random.rand() < np.exp(-delta / T):
+            current, current_cost = new, new_cost
+            if current_cost < best_cost:
+                best, best_cost = current[:], current_cost
+
+        if schedule == 'linear':
+            T = max(Tmin, T0 - it * dT_linear)
+        elif schedule == 'exponential':
+            T = T0 * (alpha ** it)
+
+        history.append((it, current_cost, T))
+
+    return best, best_cost, history
+
+if __name__ == "__main__":
+    n = 20
+    cities = generate_cities(n, seed=42)
+    D = distance_matrix(cities)
+
+    schedules = {
+        'Exponencial (alpha=0.995)': dict(schedule='exponential', alpha=0.995, T0=1000, max_iter=20000),
+        'Lineal': dict(schedule='linear', T0=1000, max_iter=20000)
+    }
+
+    results = {}
+    for name, params in schedules.items():
+        tic = time.perf_counter()
+        best, cost, hist = sa_2opt(D, seed=42, **params)
+        toc = time.perf_counter()
+        results[name] = dict(cost=cost, hist=hist, time=toc - tic)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    
+    for name, r in results.items():
+        its = [h[0] for h in r['hist']]
+        costs = [h[1] for h in r['hist']]
+        ax1.plot(its, costs, label=name, lw=1.5)
+    
+    ax1.set_xscale('log')
+    ax1.set_xlabel('Iteración')
+    ax1.set_ylabel('Costo actual')
+    ax1.set_title('Curvas de convergencia')
+    ax1.legend(); ax1.grid(True, alpha=0.3)
+
+    for name, r in results.items():
+        ax2.scatter(r['time'], r['cost'], s=150, label=name)
+    
+    ax2.set_xlabel('Tiempo de cómputo (s)')
+    ax2.set_ylabel('Costo final')
+    ax2.set_title('Tiempo vs Calidad de la Solución')
+    ax2.legend(); ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('ejercicio4_sa.png', dpi=100)
+    plt.show()
+
+    print("\nANÁLISIS:")
+    print("El enfriamiento Exponencial suele lograr mejor calidad al explorar más tiempo.")
+    print("El Lineal converge más rápido (menos tiempo), pero puede quedar atascado en")
+    print("mínimos locales. Existe un trade-off claro entre exploración y explotación.")

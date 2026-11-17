@@ -1,0 +1,69 @@
+import multiprocessing as mp
+import time
+import matplotlib.pyplot as plt
+
+def estimate_pi_chunk(args):
+    """Calcula un fragmento de la integral numérica para estimar Pi."""
+    start, end, steps = args
+    step_size = 1.0 / steps
+    local_sum = 0.0
+    for i in range(start, end):
+        x = (i + 0.5) * step_size
+        local_sum += 4.0 / (1.0 + x * x)
+    return local_sum
+
+def estimate_pi(processes, total_steps=10_000_000):
+    """Función principal que reparte el trabajo entre N procesos."""
+    if processes == 1:
+        return estimate_pi_chunk((0, total_steps, total_steps)) * (1.0 / total_steps)
+    
+    chunk_size = total_steps // processes
+    chunks = []
+    for i in range(processes):
+        start = i * chunk_size
+        end = total_steps if i == processes - 1 else (i + 1) * chunk_size
+        chunks.append((start, end, total_steps))
+    
+    with mp.Pool(processes) as pool:
+        results = pool.map(estimate_pi_chunk, chunks)
+    
+    return sum(results) * (1.0 / total_steps)
+
+if __name__ == "__main__":
+    print("Ejercicio 1: Aceleración Paralela")
+    procesos_lista = [1, 2, 4, 8]
+    tiempos = []
+    
+    # Calentamiento (para que el sistema operativo asigne recursos)
+    estimate_pi(1, 1_000_000)
+
+    for p in procesos_lista:
+        start_time = time.perf_counter()
+        pi_est = estimate_pi(p)
+        end_time = time.perf_counter()
+        t = end_time - start_time
+        tiempos.append(t)
+        print(f"Procesos: {p} | Tiempo: {t:.4f}s | Pi: {pi_est:.6f}")
+
+    # Calcular Speedup (Tiempo con 1 proceso / Tiempo con N procesos)
+    t1 = tiempos[0]
+    speedups = [t1 / t for t in tiempos]
+    speedup_ideal = procesos_lista
+
+    # Visualización
+    plt.figure(figsize=(8, 5))
+    plt.plot(procesos_lista, speedups, 'o-', label='Speedup Real', color='blue', linewidth=2)
+    plt.plot(procesos_lista, speedup_ideal, '--', label='Speedup Ideal (Lineal)', color='red')
+    plt.title('Aceleración (Speedup) vs Número de Procesos')
+    plt.xlabel('Número de Procesos')
+    plt.ylabel('Speedup (T1 / Tp)')
+    plt.xticks(procesos_lista)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig('ejercicio1_speedup.png', dpi=100)
+    plt.show()
+    
+    print("\nANÁLISIS:")
+    print("La aceleración no es perfectamente lineal debido a la Ley de Amdahl.")
+    print("Existe una fracción del código que es secuencial (recolección de datos, creación de procesos).")
+    print("Además, hay sobrecostos (overhead) de comunicación y sincronización entre los núcleos del procesador.")

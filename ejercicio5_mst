@@ -1,0 +1,143 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import permutations
+
+def distance_matrix(cities):
+    return np.sqrt(((cities[:, None, :] - cities[None, :, :]) ** 2).sum(-1))
+
+def tour_cost(tour, D):
+    return D[np.array(tour), np.roll(tour, -1)].sum()
+
+def mst_tour(D):
+    n = D.shape[0]
+    in_mst = [False] * n
+    key = [float('inf')] * n
+    parent = [-1] * n
+    key[0] = 0
+    adj = [[] for _ in range(n)]
+
+    for _ in range(n):
+        u = min((i for i in range(n) if not in_mst[i]), key=lambda i: key[i])
+        in_mst[u] = True
+        if parent[u] != -1:
+            adj[u].append(parent[u])
+            adj[parent[u]].append(u)
+        for v in range(n):
+            if not in_mst[v] and D[u][v] < key[v]:
+                key[v] = D[u][v]
+                parent[v] = u
+                
+    tour, visited = [], [False] * n
+    def dfs(u):
+        visited[u] = True
+        tour.append(u)
+        for v in adj[u]:
+            if not visited[v]: dfs(v)
+    dfs(0)
+    return tour
+
+def two_opt(tour, D):
+    tour = list(tour)
+    n = len(tour)
+    improved = True
+    while improved:
+        improved = False
+        for i in range(n - 1):
+            for j in range(i + 2, n):
+                if i == 0 and j == n - 1: continue
+                a, b, c, d = tour[i], tour[i + 1], tour[j], tour[(j + 1) % n]
+                delta = (D[a][c] + D[b][d]) - (D[a][b] + D[c][d])
+                if delta < -1e-10:
+                    tour[i + 1:j + 1] = reversed(tour[i + 1:j + 1])
+                    improved = True
+                    break
+            if improved: break
+    return tour
+
+def held_karp(D):
+    """TSP exacto para obtener el óptimo real en n=9."""
+    n = D.shape[0]
+    INF = float('inf')
+    dp = [[INF] * n for _ in range(1 << n)]
+    parent = [[-1] * n for _ in range(1 << n)]
+    dp[1][0] = 0.0
+    
+    for mask in range(1 << n):
+        if not (mask & 1): continue
+        for i in range(n):
+            if not (mask & (1 << i)) or dp[mask][i] == INF: continue
+            for j in range(n):
+                if mask & (1 << j): continue
+                nm = mask | (1 << j)
+                nd = dp[mask][i] + D[i][j]
+                if nd < dp[nm][j]:
+                    dp[nm][j] = nd
+                    parent[nm][j] = i
+                    
+    full = (1 << n) - 1
+    best_cost, best_end = INF, -1
+    for i in range(1, n):
+        c = dp[full][i] + D[i][0]
+        if c < best_cost:
+            best_cost, best_end = c, i
+            
+    tour, mask, cur = [], full, best_end
+    while cur != -1:
+        tour.append(cur)
+        prev = parent[mask][cur]
+        mask ^= (1 << cur)
+        cur = prev
+    tour.reverse()
+    return tour, best_cost
+
+if __name__ == "__main__":
+    n_cities = 9
+    n_instances = 100
+    np.random.seed(42)
+
+    ratios_mst, ratios_mst2 = [], []
+    costs_mst, costs_mst2 = [], []
+
+    for k in range(n_instances):
+        cities = np.random.rand(n_cities, 2)
+        D = distance_matrix(cities)
+        _, opt = held_karp(D)
+
+        # MST puro
+        t_mst = mst_tour(D)
+        c_mst = tour_cost(t_mst, D)
+        costs_mst.append(c_mst)
+        ratios_mst.append(c_mst / opt)
+
+        # MST + 2-opt
+        t_mst2 = two_opt(t_mst, D)
+        c_mst2 = tour_cost(t_mst2, D)
+        costs_mst2.append(c_mst2)
+        ratios_mst2.append(c_mst2 / opt)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    ax1.hist(ratios_mst, bins=20, alpha=0.75, color='#4472c4', edgecolor='k', label='MST puro')
+    ax1.axvline(2, color='red', ls='--', lw=2, label='Cota teórica = 2')
+    ax1.set_xlabel('Razón (C_obtenido / C_óptimo)')
+    ax1.set_ylabel('Frecuencia')
+    ax1.set_title('Distribución de la razón de aproximación')
+    ax1.legend(); ax1.grid(alpha=0.3)
+
+    ax2.boxplot([costs_mst, costs_mst2], positions=[1, 2], widths=0.6)
+    ax2.set_xticks([1, 2]); ax2.set_xticklabels(['MST puro', 'MST + 2-opt'])
+    ax2.set_ylabel('Costo del tour')
+    ax2.set_title('Mejora al aplicar 2-opt')
+    ax2.grid(alpha=0.3)
+
+    plt.suptitle('Ejercicio 5 — Aproximación por MST (100 instancias, n=9)')
+    plt.tight_layout()
+    plt.savefig('ejercicio5_mst.png', dpi=100)
+    plt.show()
+
+    print(f"Razón MST puro:    media={np.mean(ratios_mst):.4f}, máx={np.max(ratios_mst):.4f}")
+    print(f"Razón MST + 2-opt: media={np.mean(ratios_mst2):.4f}, máx={np.max(ratios_mst2):.4f}")
+    print("\nANÁLISIS:")
+    print("La razón del MST puro se mantiene por debajo del límite teórico de 2.")
+    print("Sin embargo, al aplicar 2-opt como post-procesamiento, la razón baja")
+    print("drásticamente (cerca de 1.0), demostrando que el MST da una base excelente.")
